@@ -172,7 +172,12 @@ def main():
 
     print()
     print("=== All 4 issues created ===")
-    print("Now trigger remediation: curl -X POST http://localhost:8000/api/trigger-all")
+    print()
+    print("Next step - trigger Devin sessions:")
+    print("  curl -X POST http://localhost:8000/api/trigger-all")
+    print()
+    print("Make sure Docker is running first:")
+    print("  docker-compose up --build")
 
 
 if __name__ == "__main__":
