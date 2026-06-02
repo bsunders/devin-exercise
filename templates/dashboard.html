@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Remediation Pipeline</title>
+    <meta http-equiv="refresh" content="15">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            padding: 24px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #21262d;
+        }
+        .header h1 {
+            font-size: 24px;
+            color: #f0f6fc;
+        }
+        .header .repo {
+            color: #58a6ff;
+            font-size: 14px;
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .metric-card {
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .metric-card .value {
+            font-size: 36px;
+            font-weight: 700;
+            color: #f0f6fc;
+        }
+        .metric-card .label {
+            font-size: 13px;
+            color: #8b949e;
+            margin-top: 4px;
+        }
+        .metric-card.success .value { color: #3fb950; }
+        .metric-card.running .value { color: #d29922; }
+        .metric-card.failed .value { color: #f85149; }
+        .metric-card.prs .value { color: #a371f7; }
+
+        .pipeline-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .pipeline-table th {
+            background: #21262d;
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 13px;
+            color: #8b949e;
+            font-weight: 600;
+        }
+        .pipeline-table td {
+            padding: 12px 16px;
+            border-top: 1px solid #21262d;
+            font-size: 14px;
+        }
+        .pipeline-table tr:hover {
+            background: #1c2128;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status-pending { background: #21262d; color: #8b949e; }
+        .status-running { background: #2a1f00; color: #d29922; }
+        .status-completed { background: #0d2818; color: #3fb950; }
+        .status-failed { background: #2d0a0a; color: #f85149; }
+
+        a { color: #58a6ff; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .severity-critical { color: #f85149; font-weight: 700; }
+        .severity-high { color: #db6d28; font-weight: 600; }
+        .severity-medium { color: #d29922; }
+        .severity-low { color: #8b949e; }
+
+        .actions {
+            margin-bottom: 24px;
+            display: flex;
+            gap: 12px;
+        }
+        .btn {
+            padding: 8px 20px;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+            background: #21262d;
+            color: #c9d1d9;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.15s;
+        }
+        .btn:hover { background: #30363d; }
+        .btn-primary {
+            background: #238636;
+            border-color: #2ea043;
+            color: #fff;
+        }
+        .btn-primary:hover { background: #2ea043; }
+        .btn-danger {
+            background: #da3633;
+            border-color: #f85149;
+            color: #fff;
+        }
+
+        .section-title {
+            font-size: 18px;
+            color: #f0f6fc;
+            margin-bottom: 16px;
+        }
+        .footer {
+            margin-top: 32px;
+            padding-top: 16px;
+            border-top: 1px solid #21262d;
+            color: #484f58;
+            font-size: 12px;
+            text-align: center;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 48px;
+            color: #484f58;
+        }
+        .time-ago { color: #8b949e; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>Security Remediation Pipeline</h1>
+            <span class="repo">{{ repo }}</span>
+        </div>
+        <div style="font-size:12px; color:#484f58;">
+            Auto-refreshes every 15s
+        </div>
+    </div>
+
+    <!-- Metrics Cards -->
+    <div class="metrics">
+        <div class="metric-card">
+            <div class="value">{{ metrics.total }}</div>
+            <div class="label">Total Issues</div>
+        </div>
+        <div class="metric-card running">
+            <div class="value">{{ metrics.running }}</div>
+            <div class="label">Sessions Running</div>
+        </div>
+        <div class="metric-card success">
+            <div class="value">{{ metrics.completed }}</div>
+            <div class="label">Completed</div>
+        </div>
+        <div class="metric-card failed">
+            <div class="value">{{ metrics.failed }}</div>
+            <div class="label">Failed</div>
+        </div>
+        <div class="metric-card prs">
+            <div class="value">{{ metrics.prs_opened }}</div>
+            <div class="label">PRs Opened</div>
+        </div>
+        <div class="metric-card">
+            <div class="value">{{ metrics.success_rate }}%</div>
+            <div class="label">Success Rate</div>
+        </div>
+        {% if metrics.avg_time_to_pr_minutes %}
+        <div class="metric-card">
+            <div class="value">{{ metrics.avg_time_to_pr_minutes }}m</div>
+            <div class="label">Avg Time to PR</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="actions">
+        <button class="btn btn-primary" onclick="triggerAll()">Trigger All Open Issues</button>
+        <button class="btn" onclick="runScan()">Run Vulnerability Scan</button>
+        <button class="btn" onclick="location.reload()">Refresh</button>
+    </div>
+
+    <!-- Pipeline Table -->
+    <h2 class="section-title">Remediation Tasks</h2>
+    {% if tasks %}
+    <table class="pipeline-table">
+        <thead>
+            <tr>
+                <th>Issue</th>
+                <th>CVE / Finding</th>
+                <th>Severity</th>
+                <th>Status</th>
+                <th>Devin Session</th>
+                <th>Pull Request</th>
+                <th>Created</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for task in tasks %}
+            <tr>
+                <td>
+                    <a href="{{ task.issue_url }}" target="_blank">#{{ task.issue_number }}</a>
+                    <div style="font-size:12px; color:#8b949e; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                        {{ task.issue_title }}
+                    </div>
+                </td>
+                <td>
+                    {% if task.cve_id %}
+                    <code style="background:#21262d; padding:2px 6px; border-radius:4px; font-size:12px;">
+                        {{ task.cve_id }}
+                    </code>
+                    {% else %}
+                    <span style="color:#484f58;">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="severity-{{ (task.severity or 'medium') | lower }}">
+                        {{ (task.severity or 'medium') | upper }}
+                    </span>
+                </td>
+                <td>
+                    <span class="status-badge status-{{ task.session_status }}">
+                        {{ task.session_status }}
+                    </span>
+                </td>
+                <td>
+                    {% if task.session_url %}
+                    <a href="{{ task.session_url }}" target="_blank">View Session</a>
+                    {% else %}
+                    <span style="color:#484f58;">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if task.pr_url %}
+                    <a href="{{ task.pr_url }}" target="_blank">PR #{{ task.pr_number or '?' }}</a>
+                    {% elif task.session_status == 'running' %}
+                    <span style="color:#d29922;">Pending...</span>
+                    {% else %}
+                    <span style="color:#484f58;">—</span>
+                    {% endif %}
+                </td>
+                <td class="time-ago">{{ task.created_at[:16] if task.created_at else '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No remediation tasks yet.</p>
+        <p style="margin-top:8px;">Run a scan or trigger issues to get started.</p>
+    </div>
+    {% endif %}
+
+    <div class="footer">
+        Powered by <a href="https://devin.ai" target="_blank">Devin</a> | Security Remediation Pipeline
+    </div>
+
+    <script>
+        async function triggerAll() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Triggering...';
+            try {
+                const resp = await fetch('/api/trigger-all', { method: 'POST' });
+                const data = await resp.json();
+                alert(`Triggered ${data.total} issue(s): ${data.issues?.join(', ') || 'none'}`);
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+            btn.disabled = false;
+            btn.textContent = 'Trigger All Open Issues';
+            setTimeout(() => location.reload(), 2000);
+        }
+
+        async function runScan() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Scanning...';
+            try {
+                const resp = await fetch('/api/scan', { method: 'POST' });
+                const data = await resp.json();
+                alert('Scan started! Issues will appear shortly.');
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+            btn.disabled = false;
+            btn.textContent = 'Run Vulnerability Scan';
+        }
+
+        async function triggerIssue(issueNumber) {
+            try {
+                const resp = await fetch(`/api/trigger/${issueNumber}`, { method: 'POST' });
+                const data = await resp.json();
+                alert(`Status: ${data.status}`);
+                location.reload();
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+    </script>
+</body>
+</html>
