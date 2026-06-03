@@ -235,6 +235,7 @@
         <span class="selected-count" id="selectedCount"></span>
         <div style="flex:1"></div>
         <button class="btn" onclick="location.reload()">Refresh</button>
+        <button class="btn btn-danger" onclick="resetDashboard()" style="background:#da3633;border-color:#f85149;color:#fff;">Reset Dashboard</button>
     </div>
 
     <!-- Pipeline Table -->
@@ -410,6 +411,18 @@
             }
             btn.disabled = false;
             btn.textContent = 'Run Vulnerability Scan';
+        }
+
+        async function resetDashboard() {
+            if (!confirm('Clear all tasks from the dashboard? This only clears the local database — GitHub issues and PRs are not affected.')) return;
+            try {
+                const resp = await fetch('/api/reset', { method: 'POST' });
+                const data = await resp.json();
+                alert(`Dashboard cleared: ${data.tasks_cleared} task(s) removed.`);
+                location.reload();
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
         }
 
         // Initialize selected count on load
