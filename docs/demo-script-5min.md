@@ -3,45 +3,60 @@
 
 ---
 
-## PRE-RECORDING SETUP (do this 30+ minutes BEFORE you hit record)
+## PRE-RECORDING SETUP
 
-### Step 1: Set up the pipeline (one-time)
+### Step 1: Clean slate
 ```bash
 # In your devin-exercise directory
-source .env                                          # load tokens
-./scripts/reset-demo.sh                              # clean slate
-docker-compose down && docker-compose up --build     # restart fresh
-./scripts/create-issues.sh                           # create 4 issues
-curl -X POST http://localhost:8000/api/trigger-all   # launch Devin sessions
+source .env
+./scripts/reset-demo.sh
+```
+```cmd
+REM Windows
+scripts\reset-demo.bat
 ```
 
-### Step 2: Wait for Devin to finish (~15-20 min)
-- Check `http://localhost:8000` — dashboard will show sessions completing
-- Check `https://github.com/bsunders/superset/pulls` — wait until 4 PRs are open
-- **Don't record until all 4 PRs are open and dashboard shows "completed"**
+### Step 2: Rebuild and start Docker
+```bash
+docker-compose down && docker-compose build --no-cache && docker-compose up
+```
 
-### Step 3: Open these browser tabs (left to right, BEFORE recording)
-1. **Dashboard** — `http://localhost:8000` (should show 4 completed, 4 PRs)
-2. **GitHub Issues** — `https://github.com/bsunders/superset/issues` (4 issues with labels)
-3. **Issue #1 detail** — click the Flask issue to get the URL
-4. **PR: Flask** — the Flask upgrade PR (find in open PRs list)
-5. **PR: Flask Files Changed** — same PR, click "Files changed" tab
+### Step 3: Create the 4 GitHub issues
+```bash
+./scripts/create-issues.sh       # or: scripts\create-issues.bat
+```
+
+### Step 4: Open the dashboard at `http://localhost:8000`
+- You should see an empty dashboard
+- **Start Loom recording now** — you'll record the full flow live
+
+### Step 5: During recording
+1. Click **Load Open Issues** → 4 rows appear with "open" status
+2. Select all checkboxes → click **Fix Issues with Devin** → sessions launch
+3. **Stop recording** (or pause if Loom supports it)
+4. Wait ~15-20 min for Devin to finish and PRs to appear
+5. **Resume recording** — dashboard now shows "completed" + PR links
+
+### Step 6: Edit in Loom
+- Cut out the wait time between "Fix Issues with Devin" click and the completed state
+- Add a transition like *"I'll fast-forward here — Devin is now working on all four in parallel..."*
+
+### Browser tabs to have ready (open BEFORE recording)
+1. **Dashboard** — `http://localhost:8000`
+2. **GitHub Issues** — `https://github.com/bsunders/superset/issues`
+3. **GitHub PRs** — `https://github.com/bsunders/superset/pulls` (open after Devin finishes, before resuming recording)
+4. **PR: Flask** — open after Devin finishes (the Flask upgrade PR)
+5. **PR: Flask Files Changed** — same PR, "Files changed" tab
 6. **PR: eslint malware** — the eslint plugin rename PR
 7. **PR: Paramiko** — the Paramiko investigation PR
-8. **Devin session** — `https://app.devin.ai` → find one of the completed sessions (log in first)
-9. **Code: main.py** — `https://github.com/bsunders/devin-exercise/blob/initial-setup/app/main.py`
-10. **Code: devin_client.py** — `https://github.com/bsunders/devin-exercise/blob/initial-setup/app/devin_client.py`
+8. **Code: main.py** — `https://github.com/bsunders/devin-exercise/blob/initial-setup/app/main.py`
+9. **Code: devin_client.py** — `https://github.com/bsunders/devin-exercise/blob/initial-setup/app/devin_client.py`
 
-**NOTE:** Tab URLs will use whatever issue/PR numbers get created in your run.
-The numbers change each time you reset. Just navigate to them manually.
-
-### Step 4: Hit record
-- Loom screen + webcam
-- Have this script open on a second monitor or printed
+**NOTE:** PR/issue numbers change each time you reset. Navigate to them manually.
 
 ---
 
-## 0:00–1:15 — WHAT: Problem Framing
+## 0:00–1:00 — WHAT: Problem Framing
 
 ### SCREEN: GitHub Issues page (tab 2)
 *Show the 4 issues with `devin-remediate` labels visible*
@@ -59,55 +74,51 @@ The numbers change each time you reset. Just navigate to them manually.
 >
 > **What if we could go from scan result to reviewable pull request in under 15 minutes, with zero engineer time?** That's what this system does."
 
-**WHY THIS MATTERS:** *You're establishing the business pain. Every VP has a backlog of unfixed CVEs and knows the compliance pressure.*
+**WHY THIS MATTERS:** *You're establishing the business pain. Every VP has a backlog of unfixed CVEs.*
 
 ---
 
-## 1:15–1:45 — HOW (Part 1): The Dashboard
+## 1:00–2:00 — HOW (Part 1): Live Demo — Load, Select, Fix
 
 ### SCREEN: Dashboard (tab 1)
-*Show http://localhost:8000 — it should already show 4 completed sessions and 4 PRs*
+*Show http://localhost:8000 — empty dashboard*
 
 **SAY:**
-> "This is the observability dashboard — the single pane of glass for the entire pipeline. Across the top you can see the key metrics: **total issues tracked, sessions completed, PRs opened, and the overall success rate.**
->
-> Below that is the task table. Each row is one vulnerability — you can see the issue number, the CVE ID, the current status, a direct link to the Devin session that worked on it, and the resulting pull request. This auto-refreshes every 15 seconds.
->
-> If I were an engineering leader, this dashboard answers the question: **'Is this thing working, and where are we at?'**"
+> "Here's the pipeline dashboard. Right now it's empty — no tasks tracked yet. Let me show you the full flow."
 
-**WHY THIS MATTERS:** *You're showing observability — one of the three deliverables they asked for. Keep it brief — the dashboard speaks for itself.*
+*Click **Load Open Issues** — 4 rows appear with blue "open" status badges and checkboxes*
+
+> "I've just pulled in the 4 open issues from GitHub. Each row shows the issue number, the CVE ID, and the severity. They're all in 'open' status — meaning they've been identified but Devin hasn't started working on them yet."
+
+*Click the "select all" checkbox in the header, then click **Fix Issues with Devin***
+
+> "Now I select all four and click **Fix Issues with Devin**. Under the hood, for each issue, the orchestrator is calling the Devin REST API with a detailed prompt — the CVE ID, the affected package, the current and target versions, and specific remediation instructions tailored to this codebase. Each issue gets its own Devin session running in parallel."
+
+*Dashboard should now show "running" status for all 4*
+
+> "You can see all four sessions are now running. Each row has a direct link to the Devin session so you can watch it work in real time. I'll fast-forward here — Devin typically takes 10 to 15 minutes to analyze the vulnerability, make the code changes, run tests, and open a pull request."
+
+**[CUT — edit out the wait. Resume when dashboard shows "completed" + PR links]**
+
+### SCREEN: Dashboard — after Devin finishes
+*Dashboard should now show 4 "completed" rows with PR links*
+
+> "And here are the results. All four sessions completed successfully — **four PRs opened, zero human code written**. Let's look at what Devin actually produced."
+
+**WHY THIS MATTERS:** *You're showing the full event-driven flow live — from issue to Devin session to PR. The cut is natural and expected.*
 
 ---
 
-## 1:45–2:15 — HOW (Part 2): How the Pipeline Works
-
-### SCREEN: Stay on Dashboard, or briefly show the terminal
-
-**SAY:**
-> "Let me explain how this pipeline gets triggered. There are three modes:
->
-> **One** — a GitHub webhook. When someone adds the `devin-remediate` label to any issue, the webhook fires and a Devin session starts automatically. This is the production mode.
->
-> **Two** — manual trigger. I can hit this button on the dashboard, or run a curl command from the CLI. This kicks off Devin sessions for every open issue with that label. That's what I used to launch the 4 sessions you see here.
->
-> **Three** — the built-in scanner. It clones the repo, runs `pip-audit` and `npm audit`, and files GitHub issues automatically. Full end-to-end from scan to Devin session in one API call.
->
-> Under the hood, for each issue, the orchestrator calls the **Devin REST API** with a detailed prompt that includes the CVE ID, the affected package, the current version, the fix version, and specific remediation instructions tailored to this codebase."
-
-**WHY THIS MATTERS:** *You're showing event-driven architecture — another key requirement. The three trigger modes show flexibility.*
-
----
-
-## 2:15–3:15 — HOW (Part 3): What Devin Actually Did — The PRs
+## 2:00–3:15 — HOW (Part 2): What Devin Actually Did — The PRs
 
 ### SCREEN: PR: Flask (tab 4)
 *Show the PR description*
 
 **SAY:**
-> "Now let's look at what Devin actually produced. This is the Flask upgrade PR. Devin upgraded Flask from 2.3.3 to 3.1.3 — but here's the interesting part."
+> "This is the Flask upgrade PR. Devin upgraded Flask from 2.3.3 to 3.1.3 — but here's the interesting part."
 
 ### SCREEN: PR: Flask Files Changed (tab 5)
-*Show the diff — three files changed*
+*Show the diff*
 
 > "Look at the diff. It's not just a version bump. Devin found that **Flask 3.x removed the `flask.escape` function** — a breaking change. It traced the usage to a test file, and migrated the import to `markupsafe.escape`. That's the kind of thing that breaks CI if you just bump the version blindly.
 >
@@ -121,35 +132,35 @@ The numbers change each time you reset. Just navigate to them manually.
 ### SCREEN: PR: Paramiko (tab 7)
 *Show the investigation table and DSSKey shim section*
 
-> "And for Paramiko — there was no simple version bump available at first glance. Devin **researched the CVE**, found that paramiko 5.0.0 fixed it, but discovered that `sshtunnel` — a downstream dependency — still references a class that was removed in paramiko 4.0. So Devin **wrote a compatibility shim** and documented the risk. This is the kind of remediation that would take a senior engineer 2-3 hours of investigation."
+> "And for Paramiko — Devin **researched the CVE**, found that paramiko 5.0.0 fixed it, but discovered that `sshtunnel` — a downstream dependency — still references a class that was removed in paramiko 4.0. So Devin **wrote a compatibility shim** and documented the risk. This is the kind of remediation that would take a senior engineer 2-3 hours of investigation."
 
-**WHY THIS MATTERS:** *This is the money section. Each PR demonstrates a different level of complexity that goes beyond what any bump bot can do. Spend the most time here.*
+**WHY THIS MATTERS:** *This is the money section. Each PR shows a different level of complexity beyond any bump bot. Spend the most time here.*
 
 ---
 
-## 3:15–3:50 — HOW (Part 4): Architecture Walkthrough
+## 3:15–3:50 — HOW (Part 3): Architecture Walkthrough
 
-### SCREEN: main.py on GitHub (tab 9)
+### SCREEN: main.py on GitHub (tab 8)
 *Scroll through the key sections*
 
 **SAY:**
 > "Quick architecture walkthrough. The entire system is about **400 lines of Python** in a FastAPI app.
 >
-> The main orchestrator handles webhook events, manual triggers, and runs a background poller that checks Devin session status every 30 seconds."
+> The main orchestrator handles webhook events, the dashboard UI, and runs a background poller that checks Devin session status every 30 seconds. Issues can come in three ways: GitHub webhooks, the manual dashboard buttons you just saw, or the built-in vulnerability scanner."
 
-### SCREEN: devin_client.py on GitHub (tab 10)
+### SCREEN: devin_client.py on GitHub (tab 9)
 
 > "The Devin client is a thin wrapper around the v3 REST API — `create_session`, `get_session`, `list_sessions`. The prompt template is where the real leverage is — we give Devin the CVE context, the affected files, and specific instructions for this codebase.
 >
 > State tracking uses SQLite — lightweight, zero-config, perfect for this use case. The whole thing ships as a single Docker container — `docker-compose up` and you're running."
 
-**WHY THIS MATTERS:** *Senior ICs will care about the code quality and architecture decisions. Keep it fast — they can read the code later.*
+**WHY THIS MATTERS:** *Senior ICs will care about the code quality. Keep it fast — they can read the code later.*
 
 ---
 
 ## 3:50–4:30 — WHY: Devin as Core Primitive
 
-### SCREEN: Stay on code, or switch back to Dashboard
+### SCREEN: Switch back to Dashboard
 
 **SAY:**
 > "So why Devin specifically? Why not Dependabot, Renovate, or a custom script?
@@ -170,7 +181,7 @@ The numbers change each time you reset. Just navigate to them manually.
 
 ## 4:30–5:00 — WHEN: Next Steps
 
-### SCREEN: Dashboard (tab 1)
+### SCREEN: Dashboard
 
 **SAY:**
 > "If I were rolling this out in a real customer engagement, here's how I'd extend it:
@@ -194,7 +205,7 @@ The numbers change each time you reset. Just navigate to them manually.
 | Number | Where to mention it |
 |--------|-------------------|
 | **4 real CVEs found** | Problem framing (0:00) |
-| **4 PRs produced, zero human code** | After showing the PRs (3:15) |
+| **4 PRs produced, zero human code** | After showing the PRs (2:00) |
 | **~400 lines of Python** | Architecture section (3:15) |
 | **Sub-15-minute** end-to-end | Problem framing or close |
 | **150 engineer-hours/quarter saved** | ROI in closing (4:30) |
@@ -204,13 +215,13 @@ The numbers change each time you reset. Just navigate to them manually.
 
 ## RECORDING TIPS
 
-- **Set up ONCE, then record.** Don't reset right before recording — let Devin finish first so all 4 PRs are ready. You're presenting results, not waiting for them live.
+- **Record the full flow live.** Show the empty dashboard → Load Issues → Select All → Fix with Devin → cut → show completed results. This is more compelling than a pre-baked demo.
+- **The cut is natural.** Say "I'll fast-forward here" and edit in Loom. Everyone understands parallel async work takes time.
 - **Pace yourself.** 5 minutes feels short but you have plenty of material. Don't rush.
 - **Pause on each PR for 5-10 seconds** so viewers can read the summary.
 - **Move your mouse to highlight** what you're talking about — the diff lines, the metrics cards, the session links.
 - **Don't read PR descriptions verbatim** — summarize the key insight from each.
 - **Keep your webcam on** (Loom default) — it builds trust with the VP audience.
-- **If something is still loading**, talk through it: "While this loads, what's happening is..."
 - **Practice once** with the script open on a second monitor, then record for real.
 
 ---
@@ -220,17 +231,15 @@ The numbers change each time you reset. Just navigate to them manually.
 ```bash
 # Full reset — will take ~20 min before you can record again
 ./scripts/reset-demo.sh
-docker-compose down && docker-compose up --build
+docker-compose down && docker-compose build --no-cache && docker-compose up
 ./scripts/create-issues.sh
-curl -X POST http://localhost:8000/api/trigger-all
-# Wait 15-20 min for Devin sessions to finish and PRs to appear
+# Then record: Load Issues → Fix with Devin → wait → resume
 ```
 
 ```cmd
 REM Windows equivalent
 scripts\reset-demo.bat
-docker-compose down && docker-compose up --build
+docker-compose down && docker-compose build --no-cache && docker-compose up
 scripts\create-issues.bat
-curl -X POST http://localhost:8000/api/trigger-all
-REM Wait 15-20 min for Devin sessions to finish and PRs to appear
+REM Then record: Load Issues → Fix with Devin → wait → resume
 ```
