@@ -235,7 +235,8 @@
         <span class="selected-count" id="selectedCount"></span>
         <div style="flex:1"></div>
         <button class="btn" onclick="location.reload()">Refresh</button>
-        <button class="btn btn-danger" onclick="resetDashboard()" style="background:#da3633;border-color:#f85149;color:#fff;">Reset Dashboard</button>
+        <button class="btn" onclick="resetDashboard()" style="background:#da3633;border-color:#f85149;color:#fff;">Reset Dashboard</button>
+        <button class="btn" onclick="fullReset()" style="background:#6e40c9;border-color:#8957e5;color:#fff;">Full Reset (GitHub + DB)</button>
     </div>
 
     <!-- Pipeline Table -->
@@ -422,6 +423,23 @@
                 location.reload();
             } catch (e) {
                 alert('Error: ' + e.message);
+            }
+        }
+
+        async function fullReset() {
+            if (!confirm('FULL RESET: This will terminate Devin sessions, close all open PRs, delete devin/ branches, and clear the dashboard.\n\nGitHub issues will be kept (so you can re-trigger them).\n\nContinue?')) return;
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Resetting...';
+            try {
+                const resp = await fetch('/api/full-reset', { method: 'POST' });
+                const data = await resp.json();
+                alert(`Full reset complete:\n• ${data.sessions_terminated} Devin session(s) terminated\n• ${data.prs_closed} PR(s) closed\n• ${data.branches_deleted} branch(es) deleted\n• ${data.tasks_cleared} task(s) cleared\n\nClick "Load Open Issues" to reload issues.`);
+                location.reload();
+            } catch (e) {
+                alert('Error: ' + e.message);
+                btn.disabled = false;
+                btn.textContent = 'Full Reset (GitHub + DB)';
             }
         }
 

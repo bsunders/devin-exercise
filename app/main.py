@@ -429,6 +429,78 @@ async def reset_dashboard() -> dict:
     return {"status": "reset", "tasks_cleared": count}
 
 
+@app.post("/api/full-reset")
+async def full_reset() -> dict:
+    """Full demo reset: terminate Devin sessions, close PRs, delete branches, clear DB."""
+    import httpx
+    gh_headers = {
+        "Authorization": f"token {settings.github_token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    results: dict = {"sessions_terminated": 0, "prs_closed": 0, "branches_deleted": 0, "tasks_cleared": 0}
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        # 1. Terminate active Devin sessions
+        if settings.devin_api_key:
+            try:
+                resp = await client.get(
+                    f"https://api.devin.ai/v3/organizations/{settings.devin_org_id}/sessions",
+                    headers={"Authorization": f"Bearer {settings.devin_api_key}"},
+                    params={"status_in": "running,blocked", "limit": 50},
+                )
+                if resp.status_code == 200:
+                    for s in resp.json().get("items", []):
+                        if "security-remediation" in s.get("tags", []):
+                            await client.delete(
+                                f"https://api.devin.ai/v3/organizations/{settings.devin_org_id}/sessions/devin-{s['session_id']}",
+                                headers={"Authorization": f"Bearer {settings.devin_api_key}"},
+                                params={"archive": "true"},
+                            )
+                            results["sessions_terminated"] += 1
+            except Exception as exc:
+                logger.warning("Error terminating Devin sessions: %s", exc)
+
+        # 2. Close open PRs
+        try:
+            resp = await client.get(
+                f"https://api.github.com/repos/{settings.superset_repo}/pulls",
+                headers=gh_headers,
+                params={"state": "open", "per_page": 100},
+            )
+            for pr in resp.json():
+                await client.patch(
+                    f"https://api.github.com/repos/{settings.superset_repo}/pulls/{pr['number']}",
+                    headers=gh_headers,
+                    json={"state": "closed"},
+                )
+                results["prs_closed"] += 1
+        except Exception as exc:
+            logger.warning("Error closing PRs: %s", exc)
+
+        # 3. Delete devin/ branches
+        try:
+            resp = await client.get(
+                f"https://api.github.com/repos/{settings.superset_repo}/branches",
+                headers=gh_headers,
+                params={"per_page": 100},
+            )
+            for branch in resp.json():
+                if branch["name"].startswith("devin/"):
+                    await client.delete(
+                        f"https://api.github.com/repos/{settings.superset_repo}/git/refs/heads/{branch['name']}",
+                        headers=gh_headers,
+                    )
+                    results["branches_deleted"] += 1
+        except Exception as exc:
+            logger.warning("Error deleting branches: %s", exc)
+
+    # 4. Clear dashboard DB
+    results["tasks_cleared"] = models.reset_db()
+
+    logger.info("Full reset: %s", results)
+    return {"status": "full_reset", **results}
+
+
 @app.get("/health")
 async def health() -> dict:
     """Health check endpoint."""
