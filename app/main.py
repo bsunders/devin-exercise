@@ -174,19 +174,50 @@ async def trigger_single_issue(
 
 @app.post("/api/load-issues")
 async def load_open_issues() -> dict:
-    """Import open GitHub issues with devin-remediate label into the dashboard (without triggering Devin)."""
+    """Import open GitHub issues with devin-remediate label into the dashboard.
+
+    Also checks for existing open PRs that reference each issue and links them
+    automatically (so the dashboard shows PRs even after a DB reset).
+    """
     import httpx
+    gh_headers = {
+        "Authorization": f"token {settings.github_token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
     async with httpx.AsyncClient(timeout=30) as client:
+        # Fetch open issues
         resp = await client.get(
             f"https://api.github.com/repos/{settings.superset_repo}/issues",
-            headers={
-                "Authorization": f"token {settings.github_token}",
-                "Accept": "application/vnd.github.v3+json",
-            },
+            headers=gh_headers,
             params={"labels": REMEDIATION_LABEL, "state": "open"},
         )
         resp.raise_for_status()
         issues = resp.json()
+
+        # Fetch open PRs to match against issues
+        pr_resp = await client.get(
+            f"https://api.github.com/repos/{settings.superset_repo}/pulls",
+            headers=gh_headers,
+            params={"state": "open", "per_page": 100},
+        )
+        pr_resp.raise_for_status()
+        open_prs = pr_resp.json()
+
+    # Build a map: issue_number -> PR info (from PR body mentioning "fixes #N" etc.)
+    issue_to_pr: dict[int, dict] = {}
+    for pr in open_prs:
+        body = (pr.get("body") or "").lower()
+        title = (pr.get("title") or "").lower()
+        for issue in issues:
+            issue_num = issue["number"]
+            # Check PR body/title for references like "#21", "issue #21", "fixes #21"
+            markers = [f"#{issue_num}", f"issue {issue_num}", f"issue/{issue_num}"]
+            if any(m in body or m in title for m in markers):
+                issue_to_pr[issue_num] = {
+                    "pr_url": pr["html_url"],
+                    "pr_number": pr["number"],
+                }
+                break
 
     loaded = 0
     skipped = 0
@@ -204,13 +235,24 @@ async def load_open_issues() -> dict:
                 cve_id = word.rstrip(":")
                 break
 
-        models.create_task(
+        pr_info = issue_to_pr.get(issue["number"])
+        status = "completed" if pr_info else "open"
+
+        task_id = models.create_task(
             issue_number=issue["number"],
             issue_url=issue["html_url"],
             issue_title=issue["title"],
             cve_id=cve_id,
-            status="open",
+            status=status,
         )
+        # If a PR already exists, link it to the task
+        if pr_info:
+            models.update_task_status(
+                task_id,
+                status="completed",
+                pr_url=pr_info["pr_url"],
+                pr_number=pr_info["pr_number"],
+            )
         loaded += 1
 
     return {"status": "loaded", "loaded": loaded, "skipped": skipped, "total": len(issues)}
