@@ -172,6 +172,50 @@ async def trigger_single_issue(
     return {"status": "triggered", "issue": issue_number, "title": issue["title"]}
 
 
+@app.post("/api/load-issues")
+async def load_open_issues() -> dict:
+    """Import open GitHub issues with devin-remediate label into the dashboard (without triggering Devin)."""
+    import httpx
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(
+            f"https://api.github.com/repos/{settings.superset_repo}/issues",
+            headers={
+                "Authorization": f"token {settings.github_token}",
+                "Accept": "application/vnd.github.v3+json",
+            },
+            params={"labels": REMEDIATION_LABEL, "state": "open"},
+        )
+        resp.raise_for_status()
+        issues = resp.json()
+
+    loaded = 0
+    skipped = 0
+    for issue in issues:
+        if "pull_request" in issue:
+            continue
+        existing = models.get_task_by_issue(issue["number"])
+        if existing:
+            skipped += 1
+            continue
+
+        cve_id = None
+        for word in issue["title"].split():
+            if word.startswith(("CVE-", "PYSEC-", "GHSA-")):
+                cve_id = word.rstrip(":")
+                break
+
+        models.create_task(
+            issue_number=issue["number"],
+            issue_url=issue["html_url"],
+            issue_title=issue["title"],
+            cve_id=cve_id,
+            status="open",
+        )
+        loaded += 1
+
+    return {"status": "loaded", "loaded": loaded, "skipped": skipped, "total": len(issues)}
+
+
 @app.post("/api/trigger-all")
 async def trigger_all_issues(background_tasks: BackgroundTasks) -> dict:
     """Trigger remediation for ALL open issues with the devin-remediate label."""
@@ -216,13 +260,17 @@ async def trigger_remediation(issue: dict) -> None:
             cve_id = word.rstrip(":")
             break
 
-    # Create task record
-    task_id = models.create_task(
-        issue_number=issue_number,
-        issue_url=issue_url,
-        issue_title=issue_title,
-        cve_id=cve_id,
-    )
+    # Reuse existing task record if loaded via load-issues, otherwise create new
+    existing = models.get_task_by_issue(issue_number)
+    if existing and existing["session_status"] in ("open", "pending"):
+        task_id = existing["id"]
+    else:
+        task_id = models.create_task(
+            issue_number=issue_number,
+            issue_url=issue_url,
+            issue_title=issue_title,
+            cve_id=cve_id,
+        )
 
     # Build prompt and create Devin session
     prompt = build_devin_prompt(issue)
@@ -329,6 +377,14 @@ async def api_metrics() -> dict:
 async def api_tasks() -> list[dict]:
     """Return all tracked tasks."""
     return models.get_all_tasks()
+
+
+@app.post("/api/reset")
+async def reset_dashboard() -> dict:
+    """Clear all tasks from the dashboard database."""
+    count = models.reset_db()
+    logger.info("Dashboard reset: %d tasks cleared", count)
+    return {"status": "reset", "tasks_cleared": count}
 
 
 @app.get("/health")

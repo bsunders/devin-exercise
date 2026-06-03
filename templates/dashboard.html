@@ -93,6 +93,7 @@
         .status-running { background: #2a1f00; color: #d29922; }
         .status-completed { background: #0d2818; color: #3fb950; }
         .status-failed { background: #2d0a0a; color: #f85149; }
+        .status-open { background: #1a2332; color: #58a6ff; }
 
         a { color: #58a6ff; text-decoration: none; }
         a:hover { text-decoration: underline; }
@@ -106,6 +107,8 @@
             margin-bottom: 24px;
             display: flex;
             gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
         }
         .btn {
             padding: 8px 20px;
@@ -118,17 +121,14 @@
             transition: background 0.15s;
         }
         .btn:hover { background: #30363d; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-primary {
             background: #238636;
             border-color: #2ea043;
             color: #fff;
         }
         .btn-primary:hover { background: #2ea043; }
-        .btn-danger {
-            background: #da3633;
-            border-color: #f85149;
-            color: #fff;
-        }
+        .btn-primary:disabled { background: #238636; }
 
         .section-title {
             font-size: 18px;
@@ -149,6 +149,34 @@
             color: #484f58;
         }
         .time-ago { color: #8b949e; font-size: 12px; }
+
+        .checkbox-cell {
+            width: 40px;
+            text-align: center;
+        }
+        .checkbox-cell input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: #238636;
+        }
+        .select-all-label {
+            font-size: 12px;
+            color: #8b949e;
+            cursor: pointer;
+            user-select: none;
+        }
+        .selected-count {
+            font-size: 13px;
+            color: #8b949e;
+            margin-left: 8px;
+        }
+        .divider {
+            width: 1px;
+            height: 24px;
+            background: #30363d;
+            margin: 0 4px;
+        }
     </style>
 </head>
 <body>
@@ -198,8 +226,14 @@
 
     <!-- Action Buttons -->
     <div class="actions">
-        <button class="btn btn-primary" onclick="triggerAll()">Trigger All Open Issues</button>
         <button class="btn" onclick="runScan()">Run Vulnerability Scan</button>
+        <button class="btn" onclick="loadOpenIssues()">Load Open Issues</button>
+        <div class="divider"></div>
+        <button class="btn btn-primary" id="fixBtn" onclick="fixSelectedIssues()" disabled>
+            Fix Issues with Devin
+        </button>
+        <span class="selected-count" id="selectedCount"></span>
+        <div style="flex:1"></div>
         <button class="btn" onclick="location.reload()">Refresh</button>
     </div>
 
@@ -209,6 +243,9 @@
     <table class="pipeline-table">
         <thead>
             <tr>
+                <th class="checkbox-cell">
+                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
+                </th>
                 <th>Issue</th>
                 <th>CVE / Finding</th>
                 <th>Severity</th>
@@ -221,6 +258,13 @@
         <tbody>
             {% for task in tasks %}
             <tr>
+                <td class="checkbox-cell">
+                    {% if task.session_status in ('open', 'pending') %}
+                    <input type="checkbox" class="issue-checkbox"
+                           data-issue="{{ task.issue_number }}"
+                           onchange="updateSelectedCount()">
+                    {% endif %}
+                </td>
                 <td>
                     <a href="{{ task.issue_url }}" target="_blank">#{{ task.issue_number }}</a>
                     <div style="font-size:12px; color:#8b949e; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
@@ -270,7 +314,7 @@
     {% else %}
     <div class="empty-state">
         <p>No remediation tasks yet.</p>
-        <p style="margin-top:8px;">Run a scan or trigger issues to get started.</p>
+        <p style="margin-top:8px;">Click <strong>Load Open Issues</strong> to import issues from GitHub, or <strong>Run Vulnerability Scan</strong> to discover new ones.</p>
     </div>
     {% endif %}
 
@@ -279,20 +323,78 @@
     </div>
 
     <script>
-        async function triggerAll() {
+        function toggleSelectAll(el) {
+            document.querySelectorAll('.issue-checkbox').forEach(cb => {
+                cb.checked = el.checked;
+            });
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            const checked = document.querySelectorAll('.issue-checkbox:checked');
+            const total = document.querySelectorAll('.issue-checkbox');
+            const countEl = document.getElementById('selectedCount');
+            const fixBtn = document.getElementById('fixBtn');
+
+            if (checked.length > 0) {
+                countEl.textContent = `${checked.length} of ${total.length} selected`;
+                fixBtn.disabled = false;
+            } else {
+                countEl.textContent = '';
+                fixBtn.disabled = true;
+            }
+
+            // Update "select all" checkbox state
+            const selectAll = document.getElementById('selectAll');
+            if (selectAll) {
+                selectAll.checked = total.length > 0 && checked.length === total.length;
+                selectAll.indeterminate = checked.length > 0 && checked.length < total.length;
+            }
+        }
+
+        async function fixSelectedIssues() {
+            const checked = document.querySelectorAll('.issue-checkbox:checked');
+            if (checked.length === 0) {
+                alert('Select at least one issue to fix.');
+                return;
+            }
+
+            const issues = Array.from(checked).map(cb => cb.dataset.issue);
+            const btn = document.getElementById('fixBtn');
+            btn.disabled = true;
+            btn.textContent = `Launching ${issues.length} Devin session(s)...`;
+
+            let triggered = 0;
+            for (const issueNum of issues) {
+                try {
+                    const resp = await fetch(`/api/trigger/${issueNum}`, { method: 'POST' });
+                    const data = await resp.json();
+                    if (data.status === 'triggered') triggered++;
+                } catch (e) {
+                    console.error(`Error triggering issue ${issueNum}:`, e);
+                }
+            }
+
+            alert(`Launched ${triggered} Devin session(s). Dashboard will update as sessions progress.`);
+            btn.disabled = false;
+            btn.textContent = 'Fix Issues with Devin';
+            setTimeout(() => location.reload(), 1500);
+        }
+
+        async function loadOpenIssues() {
             const btn = event.target;
             btn.disabled = true;
-            btn.textContent = 'Triggering...';
+            btn.textContent = 'Loading issues...';
             try {
-                const resp = await fetch('/api/trigger-all', { method: 'POST' });
+                const resp = await fetch('/api/load-issues', { method: 'POST' });
                 const data = await resp.json();
-                alert(`Triggered ${data.total} issue(s): ${data.issues?.join(', ') || 'none'}`);
+                alert(`Loaded ${data.loaded} issue(s) from GitHub. ${data.skipped} already tracked.`);
             } catch (e) {
                 alert('Error: ' + e.message);
             }
             btn.disabled = false;
-            btn.textContent = 'Trigger All Open Issues';
-            setTimeout(() => location.reload(), 2000);
+            btn.textContent = 'Load Open Issues';
+            setTimeout(() => location.reload(), 1000);
         }
 
         async function runScan() {
@@ -302,7 +404,7 @@
             try {
                 const resp = await fetch('/api/scan', { method: 'POST' });
                 const data = await resp.json();
-                alert('Scan started! Issues will appear shortly.');
+                alert('Scan started! Issues will appear in GitHub shortly. Click "Load Open Issues" to import them.');
             } catch (e) {
                 alert('Error: ' + e.message);
             }
@@ -310,16 +412,8 @@
             btn.textContent = 'Run Vulnerability Scan';
         }
 
-        async function triggerIssue(issueNumber) {
-            try {
-                const resp = await fetch(`/api/trigger/${issueNumber}`, { method: 'POST' });
-                const data = await resp.json();
-                alert(`Status: ${data.status}`);
-                location.reload();
-            } catch (e) {
-                alert('Error: ' + e.message);
-            }
-        }
+        // Initialize selected count on load
+        updateSelectedCount();
     </script>
 </body>
 </html>

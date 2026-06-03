@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reset the demo environment: terminate Devin sessions, close PRs, close issues, wipe local DB.
+# Reset the demo environment: terminate Devin sessions, close PRs, close issues, wipe dashboard DB.
 # Usage: ./scripts/reset-demo.sh
 #
 # Requires: GITHUB_TOKEN env var with repo scope
@@ -12,6 +12,7 @@ REPO="${SUPERSET_REPO:-bsunders/superset}"
 ORG_ID="${DEVIN_ORG_ID:-org-abfe461aefd94419a481e3f913c8f6c5}"
 API="https://api.github.com"
 DEVIN_API="https://api.devin.ai/v3"
+DASHBOARD="http://localhost:8000"
 KEEP_ISSUES=false
 
 for arg in "$@"; do
@@ -104,26 +105,36 @@ for branch in $BRANCHES; do
 done
 echo "  Deleted $(echo "$BRANCHES" | grep -c '[0-9a-z]' || echo 0) branch(es)"
 
-# --- Wipe local DB ---
+# --- Wipe dashboard database ---
 echo ""
-echo "=== Wiping local database ==="
-DB_PATH="${DB_PATH:-data/remediation.db}"
-if [ -f "$DB_PATH" ]; then
-  rm "$DB_PATH"
-  echo "  Deleted $DB_PATH"
+echo "=== Wiping dashboard database ==="
+# Try API reset first (works even when Docker has the DB file locked)
+RESET_RESULT=$(curl -s -X POST "$DASHBOARD/api/reset" 2>/dev/null || echo "FAILED")
+if echo "$RESET_RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); print(f'  Cleared {d[\"tasks_cleared\"]} task(s) via API')" 2>/dev/null; then
+  true
 else
-  echo "  No database found at $DB_PATH"
+  echo "  Dashboard not running — deleting DB file directly"
+  DB_PATH="${DB_PATH:-data/remediation.db}"
+  if [ -f "$DB_PATH" ]; then
+    rm -f "$DB_PATH"
+    echo "  Deleted $DB_PATH"
+  else
+    echo "  No database found at $DB_PATH"
+  fi
 fi
 
 echo ""
 echo "=== Demo reset complete ==="
 echo ""
 echo "Next steps:"
-echo "  1. Restart Docker (IMPORTANT - clears stale dashboard data):"
+echo "  1. Restart Docker (if not already running):"
 echo "     docker-compose down && docker-compose up --build"
 echo ""
 echo "  2. Recreate the 4 issues:"
 echo "     ./scripts/create-issues.sh"
 echo ""
-echo "  3. Trigger Devin sessions:"
-echo "     curl -X POST http://localhost:8000/api/trigger-all"
+echo "  3. Load issues into dashboard:"
+echo "     Click 'Load Open Issues' on the dashboard"
+echo ""
+echo "  4. Fix issues with Devin:"
+echo "     Select issues -> click 'Fix Issues with Devin'"

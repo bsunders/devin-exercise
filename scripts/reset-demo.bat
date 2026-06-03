@@ -1,5 +1,5 @@
 @echo off
-REM Reset the demo environment: terminate Devin sessions, close PRs, close issues, wipe local DB.
+REM Reset the demo environment: terminate Devin sessions, close PRs, close issues, wipe dashboard DB.
 REM Usage: scripts\reset-demo.bat [--keep-issues]
 REM
 REM Requires: GITHUB_TOKEN env var with repo scope
@@ -12,6 +12,7 @@ if "%SUPERSET_REPO%"=="" set "SUPERSET_REPO=bsunders/superset"
 if "%DEVIN_ORG_ID%"=="" set "DEVIN_ORG_ID=org-abfe461aefd94419a481e3f913c8f6c5"
 set "API=https://api.github.com"
 set "DEVIN_API=https://api.devin.ai/v3"
+set "DASHBOARD=http://localhost:8000"
 set "KEEP_ISSUES=false"
 
 if "%~1"=="--keep-issues" set "KEEP_ISSUES=true"
@@ -75,28 +76,37 @@ for /f "delims=" %%b in ('curl -s -H "%AUTH%" -H "%ACCEPT%" "%API%/repos/%SUPERS
 )
 echo   Deleted !BRANCH_COUNT! branch(es)
 
-REM --- Wipe local DB ---
+REM --- Wipe dashboard database via API (avoids Windows file lock) ---
 echo.
-echo === Wiping local database ===
-if "%DB_PATH%"=="" set "DB_PATH=data\remediation.db"
-if exist "%DB_PATH%" (
-    del "%DB_PATH%"
-    echo   Deleted %DB_PATH%
+echo === Wiping dashboard database ===
+curl -s -X POST "%DASHBOARD%/api/reset" >nul 2>&1
+if not errorlevel 1 (
+    echo   Dashboard database cleared via API
 ) else (
-    echo   No database found at %DB_PATH%
+    echo   Dashboard not running -- deleting DB file directly
+    if "%DB_PATH%"=="" set "DB_PATH=data\remediation.db"
+    if exist "%DB_PATH%" (
+        del "%DB_PATH%"
+        echo   Deleted %DB_PATH%
+    ) else (
+        echo   No database found at %DB_PATH%
+    )
 )
 
 echo.
 echo === Demo reset complete ===
 echo.
 echo Next steps:
-echo   1. Restart Docker (IMPORTANT - clears stale dashboard data):
+echo   1. Restart Docker (if not already running):
 echo      docker-compose down ^&^& docker-compose up --build
 echo.
 echo   2. Recreate the 4 issues:
 echo      scripts\create-issues.bat
 echo.
-echo   3. Trigger Devin sessions:
-echo      curl -X POST http://localhost:8000/api/trigger-all
+echo   3. Load issues into dashboard:
+echo      Click 'Load Open Issues' on the dashboard
+echo.
+echo   4. Fix issues with Devin:
+echo      Select issues -^> click 'Fix Issues with Devin'
 
 endlocal

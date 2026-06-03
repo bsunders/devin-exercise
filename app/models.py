@@ -59,14 +59,15 @@ def create_task(
     cve_id: Optional[str] = None,
     severity: Optional[str] = None,
     package_name: Optional[str] = None,
+    status: str = "pending",
 ) -> int:
     conn = get_db()
     cursor = conn.execute(
         """INSERT INTO tasks (issue_number, issue_url, issue_title, cve_id,
-           severity, package_name, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+           severity, package_name, session_status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
         (issue_number, issue_url, issue_title, cve_id, severity, package_name,
-         datetime.now(timezone.utc).isoformat()),
+         status, datetime.now(timezone.utc).isoformat()),
     )
     task_id = cursor.lastrowid
     conn.commit()
@@ -129,6 +130,17 @@ def get_task_by_issue(issue_number: int) -> Optional[dict]:
     ).fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+def reset_db() -> int:
+    """Delete all tasks and scan runs. Returns number of tasks deleted."""
+    conn = get_db()
+    count = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
+    conn.execute("DELETE FROM tasks")
+    conn.execute("DELETE FROM scan_runs")
+    conn.commit()
+    conn.close()
+    return count
 
 
 def get_metrics() -> dict:
